@@ -55,5 +55,3 @@ let runErrorRecoveringGLLAndCheckResult (graph:InputGraph) startV finalV (q:RSM)
     let startVertex,mapping = graph.ToCfpqCoreGraph startV
     let finalVertex = mapping[finalV]
     runGLLAndCheckResultForManuallyCreatedGraph (errorRecoveringEval finalVertex) startVertex finalVertex q (epsilonCountEx, terminalCountEx, nonTerminalCountEx, rangeCountEx, intermediateCountEx, weightEx)
-
-

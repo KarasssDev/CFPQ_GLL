@@ -14,10 +14,12 @@
         <Compile Include="DescriptorsStack.fs" />
         <Compile Include="GLL.fs" />
         <Compile Include="RsmBuilder.fs" />
+        <Compile Include="Input.fs" />
     </ItemGroup>
 
     <ItemGroup>
       <PackageReference Include="FSharpx.Collections" Version="3.0.1" />
+      <PackageReference Include="Loyc.Collections" Version="30.1.0" />
     </ItemGroup>
 
 </Project>

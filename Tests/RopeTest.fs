@@ -44,7 +44,7 @@ type InsertCommand () =
     override this.GenArgs len rnd =
         let index = rnd.Next(0, len)
         let size = rnd.Next(0, 5)
-        index, Array.create size (char 0) |> Array.map (fun _ -> generateChar rnd)
+        index, Array.init size (fun _ -> generateChar rnd)
 
     override this.ModelOperation model args =
         let index, content = args
