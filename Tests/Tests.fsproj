@@ -7,11 +7,14 @@
     </PropertyGroup>
 
     <ItemGroup>
+        <Compile Include="ModelBased.fs" />
+        <Compile Include="Rope.fs" />
         <Compile Include="InputGraph.fs" />
         <Compile Include="LinearGraphReader.fs" />
         <Compile Include="GLLTests.fs" />
         <Compile Include="RSMCalculator.fs" />
         <Compile Include="GolangRSM.fs" />
+        <Compile Include="RopeTest.fs" />
         <Compile Include="ErrorRecoveringTest.fs" />
         <Compile Include="Program.fs" />
     </ItemGroup>

@@ -4,13 +4,14 @@ open System.IO
 open System.Text.RegularExpressions
 open CFPQ_GLL
 open CFPQ_GLL.Common
+open FSharpx.Collections
 
 let private seed = 100
 let private rnd = System.Random(seed)
-let workDirectory = "/home/viktor/RiderProjects/CFPQ_GLL/golang"
+let workDirectory = "/home/viktor/Documents/code/work/CFPQ_GLL/golang"
 let configPath = $"{workDirectory}{Path.DirectorySeparatorChar}config"
 
-module ProgramErrors =
+module DataGeneration =
     type SyntaxError =
         | KeywordError
         | BracketError
@@ -36,6 +37,42 @@ module ProgramErrors =
                 | 5 -> TruncatedBlockError
                 | 6 -> TruncatedLineError
                 | x -> failwith $"Invalid SyntaxError: {x}"
+            static member fromString (s: string) =
+                match s with
+                | "Keyword" -> KeywordError
+                | "Bracket" -> BracketError
+                | "Operation" -> OperationError
+                | "DotComma" -> DotCommaError
+                | "TruncatedBlock" -> TruncatedBlockError
+                | "TruncatedLine" -> TruncatedLineError
+                | x -> failwith $"Invalid SyntaxError: {x}"
+
+
+    let localErrors = [| KeywordError; BracketError; OperationError; DotCommaError |]
+    let nonLocalErrors = [| TruncatedLineError; TruncatedBlockError |]
+    let allErrors = Array.concat [localErrors; nonLocalErrors]
+    
+    type Config = {
+        sizes: int array
+        errorsCount: int array
+        allowedErrors: SyntaxError array
+    }
+    with
+        static member parse (s: string) =
+            let lines = s.Split "\n"
+            let sizes = lines[0].Split " " |> Seq.map int |> Array.ofSeq
+            let errors = lines[1].Split " " |> seq |> Seq.map int |> Array.ofSeq
+            let allowedErrors =
+                match lines[2].Split " " with
+                | x when x[0] = "All" -> allErrors
+                | x when x[0] = "Local" -> localErrors
+                | x when x[0] = "NonLocal" -> nonLocalErrors
+                | x -> x |> Array.map SyntaxError.fromString
+            {
+                sizes = sizes
+                errorsCount = errors
+                allowedErrors = allowedErrors
+            }
 
     let private keywords = [| "if"; "else"; "true"; "false"; "return"; "bool"; "int"; "func"|]
     let private brackets = [| "\("; "\)"; "\{"; "\}" |]
@@ -43,9 +80,14 @@ module ProgramErrors =
 
     let private breakKeyword (keyword: string) =
         let index = rnd.Next(0, keyword.Length)
+        printfn $"{keyword} {keyword.Length}"
         match rnd.Next 2 with
-        | 0 -> keyword.Substring(0, index) + "x" + keyword.Substring(index)
-        | 1 -> keyword.Substring(0, index) + " " + keyword.Substring(index, keyword.Length - index)
+        | 0 ->
+            printfn $"{keyword} {keyword.Length} 0"
+            keyword.Substring(0, index) + "x" + keyword.Substring(index)
+        | 1 ->
+            printfn $"{keyword} {keyword.Length} 1"
+            keyword.Substring(0, index) + " " + keyword.Substring(index, keyword.Length - index)
         | _ -> failwith "Invalid random number"
 
     let private mkError (program: string) (e: SyntaxError) =
@@ -79,16 +121,17 @@ module ProgramErrors =
 
     let private samples = [| Tests.GolangRSM.functionSample; Tests.GolangRSM.cycleSample; Tests.GolangRSM.expressionSample |]
 
-    let generateProgramWithError (size: int) (errorCnt: int) =
+    let generateProgramWithError (size: int) (errorCnt: int) (allowedErrors: SyntaxError array) =
         let mutable program = ""
         while program.Length < size do
             program <- program + samples.[rnd.Next(0, samples.Length)]
 
         let mutable errors = []
         for i in 1..errorCnt do
-            let intError = rnd.Next(1, 7)
-            errors <- intError.ToString() :: errors
-            program <- mkError program (SyntaxError.fromInt intError)
+            let errorIndex = rnd.Next(0, allowedErrors.Length)
+            let error = allowedErrors[errorIndex]
+            errors <- (SyntaxError.toInt error).ToString() :: errors
+            program <- mkError program error
 
         while program.Length < size do
             program <- program + samples.[rnd.Next(0, samples.Length)]
@@ -101,10 +144,10 @@ let private saveProgram (size: int) (errors: string list) (path: string) (progra
     let filePath = $"""{path}{Path.DirectorySeparatorChar}{fileName}"""
     File.WriteAllText (filePath, program)
 
-let generateBenchmarkData (sizes: int array) (errorCnts: int array) =
-    for size in sizes do
-        for errorCnt in errorCnts do
-            let program, errors = ProgramErrors.generateProgramWithError size errorCnt
+let private generateBenchmarkDataByConfig (config: DataGeneration.Config)=
+    for size in config.sizes do
+        for errorCnt in config.errorsCount do
+            let program, errors = DataGeneration.generateProgramWithError size errorCnt config.allowedErrors
             saveProgram size errors workDirectory program
 
 type BenchmarkData = {
@@ -129,8 +172,8 @@ let private loadBenchmarkDataText () =
 
 let private getDataFromText (name: string, text: string) =
     let graph = text |> Tests.LinearGraphReader.mkLinearGraph id
-    let startV = 0<inputGraphVertex>
-    let finalV = LanguagePrimitives.Int32WithMeasure<inputGraphVertex>(graph.NumberOfVertices() - 1)
+    let startV = 0
+    let finalV = graph.NumberOfVertices() - 1
 
     let startVertex,mapping = graph.ToCfpqCoreGraph startV
     let finalVertex = mapping[finalV]
@@ -156,7 +199,7 @@ let private getDataFromText (name: string, text: string) =
             parts[2]
             |> seq
             |> List.ofSeq
-            |> List.map (string << ProgramErrors.SyntaxError.fromInt << int << string)
+            |> List.map (string << DataGeneration.SyntaxError.fromInt << int << string)
         size, errors
 
     let (size, errors) = splitData name
@@ -176,8 +219,8 @@ let private getDataFromText (name: string, text: string) =
 
 let private refreshData (data: BenchmarkData) =
      let graph = data.Text |> Tests.LinearGraphReader.mkLinearGraph id
-     let startV = 0<inputGraphVertex>
-     let finalV = LanguagePrimitives.Int32WithMeasure<inputGraphVertex>(graph.NumberOfVertices() - 1)
+     let startV = 0
+     let finalV = graph.NumberOfVertices() - 1
 
      let startVertex,mapping = graph.ToCfpqCoreGraph startV
      let finalVertex = mapping[finalV]
@@ -197,6 +240,10 @@ let private refreshData (data: BenchmarkData) =
 
 let private loadBenchmarkData () =
     benchmarkData <- loadBenchmarkDataText () |> Array.map getDataFromText
+
+let generateBenchmarkData () =
+    let config = DataGeneration.Config.parse (System.IO.File.ReadAllText configPath)
+    generateBenchmarkDataByConfig config
 
 let reloadBenchmarkData () =
     match benchmarkData with
