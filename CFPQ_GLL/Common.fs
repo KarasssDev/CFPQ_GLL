@@ -117,6 +117,8 @@ and LinearInputGraphVertexBase (id:int32) =
         | None -> outgoingEdge <- Some (terminal, target)
         | Some x -> failwithf $"Edge exists: %A{x}"
 
+    member this.RemoveOutgoingEdge () = outgoingEdge <- None
+
     member this.Id = id
     member this.OutgoingEdge =
         match outgoingEdge with
